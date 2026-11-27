@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>STARK Phone Camera</title>
+<style>
+html,body{margin:0;height:100%;background:#0f1720;color:#e8eef4;font:16px system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px;box-sizing:border-box}
+h1{font-size:20px;margin:4px 0}
+#st{font-weight:700;color:#f2a900;text-align:center;min-height:24px}
+video{width:100%;max-width:520px;border-radius:12px;background:#000;border:2px solid #2c3a4a}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+button{font:600 16px system-ui;padding:12px 18px;border-radius:10px;border:0;background:#f2a900;color:#111}
+button.alt{background:#223142;color:#e8eef4;border:1px solid #2c3a4a}
+p{color:#9fb0c2;max-width:520px;text-align:center;margin:0;line-height:1.5;font-size:14px}
+</style></head><body>
+<h1>STARK Phone Camera</h1>
+<div id="st">Starting…</div>
+<video id="pv" playsinline muted autoplay></video>
+<div class="row"><button id="flip" class="alt">Flip camera</button><button id="re">Reconnect</button></div>
+<p>Place the phone in landscape where it can see you and your hands, about 1 to 2 metres away. Your video goes only to your laptop and is not recorded or stored. Keep this page open.</p>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),st=t=>$("st").textContent=t,code=location.hash.slice(1);
+let stream=null,facing="environment",peer=null,call=null,timer=null;
+async function cam(){
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}},audio:false});
+  $("pv").srcObject=stream;await $("pv").play();
+  if(call&&call.peerConnection){const s=call.peerConnection.getSenders().find(x=>x.track&&x.track.kind==="video");if(s)s.replaceTrack(stream.getVideoTracks()[0])}
+}
+async function connect(){
+  clearInterval(timer);if(peer)peer.destroy();
+  if(!/^[a-z0-9]{8,}$/.test(code)){st("Open this page by scanning the code in the STARK controller window.");return}
+  if(typeof Peer==="undefined"){st("Could not load the connection library. Check your internet.");return}
+  try{st("Starting camera…");await cam()}catch(e){st("Camera blocked. Allow camera access for this page.");return}
+  try{await navigator.wakeLock.request("screen")}catch(e){}
+  st("Connecting to your laptop…");
+  peer=new Peer();
+  peer.on("open",()=>{
+    call=peer.call("stark-"+code,stream);
+    timer=setInterval(()=>{const c=call&&call.peerConnection&&call.peerConnection.connectionState;
+      if(c==="connected")st("✅ Connected. You can put the phone down."); else if(c==="failed"||c==="disconnected"||c==="closed")st("Disconnected. Tap Reconnect.")},1000);
+  });
+  peer.on("error",e=>st(e.type==="peer-unavailable"?"Laptop not found. Check that the STARK window shows the code, then Reconnect.":"Connection error: "+e.type));
+}
+$("flip").onclick=async()=>{facing=facing==="environment"?"user":"environment";try{await cam()}catch(e){st("Could not switch camera.")}};
+$("re").onclick=connect;
+connect();
+</script></body></html>
